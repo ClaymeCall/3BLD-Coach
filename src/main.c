@@ -1,15 +1,22 @@
 #include "header.h"
 
+#include <stdlib.h>
+
 int main() {
 
-  Cubie Cubie = {
-    CORNER,
-    'a',
-    0,
-    {WHITE, ORANGE, BLUE}
-  };
+  Cube* cube = generate_cube();
 
-  print_cubie(&Cubie);
+  if (cube == NULL)
+    printf("Failed cube generation\n");
+
+  print_cube(cube);
+
+  scramble_cube(cube);
+    printf("Scrambled cube\n");
+
+  print_cube(cube);
+
+  free(cube);
 
   return 1;
 };

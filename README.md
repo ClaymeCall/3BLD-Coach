@@ -1,17 +1,17 @@
 # 🧠 3BLD-Coach
 
-A command-line (or GUI) training tool for learning and mastering **3x3 Blindfolded Solving (3BLD)**.  
+A command-line (or GUI) training tool for learning and mastering **3x3 Blindfolded Solving (3BLD)**.
 Simulates cube states, scrambles, buffer-based memo training, and generates corner and edge solutions to help you speed up your blindsolving game.
 
 ---
 
 ## 🚀 Features
 
-- 🧩 Accurate 3x3 cube simulation
-- 🔀 WCA-style scramble generator
-- 🎯 Corner & edge memo assistant
-- 🧠 Buffer-based solution generation
-- 📈 Memory and execution practice modes
+- 🧩 Accurate 3x3 cube simulation *(coming soon)*
+- 🔀 WCA-style scramble generator *(coming soon)*
+- 🎯 Corner & edge memo assistant *(coming soon)*
+- 🧠 Buffer-based solution generation *(coming soon)*
+- 📈 Memory and execution practice modes *(coming soon)*
 - ⚙️ Customizable buffer and sticker settings *(coming soon)*
 
 ---
@@ -19,7 +19,7 @@ Simulates cube states, scrambles, buffer-based memo training, and generates corn
 ## 📦 Installation
 
 ```bash
-git clone https://github.com/yourusername/3bld-c.git
+git clone https://github.com/claymecall/3bld-c.git
 cd 3bld-c
 make
 ./3bld-c
@@ -59,8 +59,9 @@ Planned options:
 
 ## ✅ To-Do
 
+* [ ] Implement simulation
+* [ ] Add unit tests
 * [ ] Visual representation of cube (CLI or TUI)
 * [ ] Support multiple solving methods (3-style, OP, M2, etc.)
 * [ ] JSON import/export of memo sessions
-* [ ] Add unit tests
 * [ ] GUI version (maybe in SDL or QT)
