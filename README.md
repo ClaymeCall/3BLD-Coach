@@ -46,8 +46,12 @@ cargo run -- scramble --length 20
 cargo run -- solve corners
 cargo run -- solve edges
 
+# Chain both piece types on the same scramble
+cargo run -- solve all
+
 # Same, but with freestyle 3-style targets instead
 cargo run -- solve corners --method three-style
+cargo run -- solve all --method three-style
 
 # Pick custom buffer pieces (default is UBL corner / UB edge, i.e. 'A'/'A')
 cargo run -- solve corners --corner-buffer E

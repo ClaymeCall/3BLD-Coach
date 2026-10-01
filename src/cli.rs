@@ -53,6 +53,8 @@ enum Command {
 enum Piece {
     Corners,
     Edges,
+    /// Both piece types, chained on the same scramble.
+    All,
 }
 
 #[derive(Clone, Copy, Default, ValueEnum)]
@@ -89,6 +91,19 @@ fn parse_speffz_letter(s: &str) -> Result<char, String> {
     }
 }
 
+/// Labels each piece type's output line when `solve all` chains both, so
+/// the two memos aren't ambiguous; solving a single piece type keeps the
+/// original unlabeled output.
+fn solve_prefix(piece: memo::Piece, piece_count: usize) -> &'static str {
+    if piece_count == 1 {
+        return "";
+    }
+    match piece {
+        memo::Piece::Corners => "Corners -- ",
+        memo::Piece::Edges => "Edges -- ",
+    }
+}
+
 pub fn run() {
     let cli = Cli::parse();
     match cli.command {
@@ -97,9 +112,10 @@ pub fn run() {
             println!("{}", cube::to_wca_string(&scramble));
         }
         Command::Solve { piece, buffers, method } => {
-            let piece = match piece {
-                Piece::Corners => memo::Piece::Corners,
-                Piece::Edges => memo::Piece::Edges,
+            let pieces: &[memo::Piece] = match piece {
+                Piece::Corners => &[memo::Piece::Corners],
+                Piece::Edges => &[memo::Piece::Edges],
+                Piece::All => &[memo::Piece::Corners, memo::Piece::Edges],
             };
             let scramble = cube::random_scramble(25);
             let cube = cube::scrambled(&scramble);
@@ -107,37 +123,47 @@ pub fn run() {
 
             match method {
                 Method::OldPochmann => {
-                    let steps = memo::cycles(&cube, piece, &buffers.buffers());
-                    if steps.is_empty() {
-                        println!("Already solved.");
-                    } else {
-                        let letters: String = steps.iter().map(|s| s.letter).collect();
-                        println!("Memo: {letters}");
+                    for &piece in pieces {
+                        let steps = memo::cycles(&cube, piece, &buffers.buffers());
+                        let prefix = solve_prefix(piece, pieces.len());
+                        if steps.is_empty() {
+                            println!("{prefix}Already solved.");
+                        } else {
+                            let letters: String = steps.iter().map(|s| s.letter).collect();
+                            println!("{prefix}Memo: {letters}");
+                        }
                     }
                 }
                 Method::ThreeStyle => {
                     let memo = threestyle::generate(&cube, &buffers.buffers());
-                    let (targets, other_name, other_has_parity) = match piece {
-                        memo::Piece::Corners => {
-                            (&memo.corners, "edge", memo.edges.iter().any(|t| matches!(t, Target::EdgeParity { .. })))
-                        }
-                        memo::Piece::Edges => (
-                            &memo.edges,
-                            "corner",
-                            memo.corners.iter().any(|t| matches!(t, Target::CornerParity { .. })),
-                        ),
-                    };
+                    for &piece in pieces {
+                        let (targets, other_name, other_has_parity) = match piece {
+                            memo::Piece::Corners => {
+                                (&memo.corners, "edge", memo.edges.iter().any(|t| matches!(t, Target::EdgeParity { .. })))
+                            }
+                            memo::Piece::Edges => (
+                                &memo.edges,
+                                "corner",
+                                memo.corners.iter().any(|t| matches!(t, Target::CornerParity { .. })),
+                            ),
+                        };
+                        let prefix = solve_prefix(piece, pieces.len());
 
-                    if targets.is_empty() {
-                        println!("Already solved.");
-                    } else {
-                        println!("Memo: {}", threestyle::display(targets));
-                    }
-                    if other_has_parity {
-                        let article = if other_name == "edge" { "an" } else { "a" };
-                        println!(
-                            "Parity required: pair this with {article} {other_name} parity target (see the other piece type)."
-                        );
+                        if targets.is_empty() {
+                            println!("{prefix}Already solved.");
+                        } else {
+                            println!("{prefix}Memo: {}", threestyle::display(targets));
+                        }
+                        // When solving both piece types together, a lone
+                        // parity target is paired with the other type's own
+                        // output just below, so the cross-reference warning
+                        // would be redundant.
+                        if other_has_parity && pieces.len() == 1 {
+                            let article = if other_name == "edge" { "an" } else { "a" };
+                            println!(
+                                "Parity required: pair this with {article} {other_name} parity target (see the other piece type)."
+                            );
+                        }
                     }
                 }
             }
