@@ -18,16 +18,6 @@ Simulates cube states, scrambles, buffer-based memo training, and generates corn
 
 ## 📦 Installation
 
-```bash
-git clone https://github.com/claymecall/3bld-c.git
-cd 3bld-c
-make
-./3bld-c
-````
-
-> Requires `gcc`, `make`, and a POSIX-compliant environment.
-
----
 
 ## 🕹️ Usage
 
