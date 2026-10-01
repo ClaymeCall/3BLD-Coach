@@ -17,19 +17,13 @@ use crate::memo::{self, CycleStep, Piece};
 
 /// Runs one interactive memo + execution practice session against
 /// stdin/stdout.
-pub fn run_session() {
+pub fn run_session(buffers: &Buffers) {
     let scramble = cube::random_scramble(25);
     let cube = cube::scrambled(&scramble);
     let stdin = io::stdin();
     let stdout = io::stdout();
 
-    session(
-        &cube,
-        &cube::to_wca_string(&scramble),
-        &Buffers::default(),
-        stdin.lock(),
-        stdout.lock(),
-    );
+    session(&cube, &cube::to_wca_string(&scramble), buffers, stdin.lock(), stdout.lock());
 }
 
 /// The testable core of [`run_session`]: takes the scramble already applied
@@ -106,9 +100,13 @@ mod tests {
     /// Runs `session` with scripted stdin lines and returns everything it
     /// printed, for assertions against the transcript.
     fn run(cube: &CubeState, input_lines: &[&str]) -> String {
+        run_with(cube, &Buffers::default(), input_lines)
+    }
+
+    fn run_with(cube: &CubeState, buffers: &Buffers, input_lines: &[&str]) -> String {
         let input = Cursor::new(input_lines.join("\n").into_bytes());
         let mut output = Vec::new();
-        session(cube, "R U F", &Buffers::default(), input, &mut output);
+        session(cube, "R U F", buffers, input, &mut output);
         String::from_utf8(output).unwrap()
     }
 
@@ -165,5 +163,23 @@ mod tests {
         assert!(transcript.contains("Edge memo"));
         assert!(transcript.contains("Press Enter to start executing"));
         assert!(transcript.contains("Execution time:"));
+    }
+
+    #[test]
+    fn custom_buffer_changes_which_memo_is_expected() {
+        // Same physical twist as the default-buffer tests above
+        // (U1<-L1<-B3<-U1), but with the corner buffer set to 'E' (LUB)
+        // instead of the default 'A' (UBL): the solver now starts their
+        // memo from a different corner in the same 3-cycle, so the
+        // expected letters are its *other* two stickers.
+        let mut state = cubesim::solved_state(3);
+        state[sticker_index(3, Face::U, 1) as usize] = Face::L;
+        state[sticker_index(3, Face::L, 1) as usize] = Face::B;
+        state[sticker_index(3, Face::B, 3) as usize] = Face::U;
+        let cube = FaceletCube::from(state);
+
+        let buffers = Buffers::new('E', 'A').unwrap();
+        let transcript = run_with(&cube, &buffers, &["RA", "", "", ""]);
+        assert!(transcript.contains("Corners: correct (RA)"), "{transcript}");
     }
 }

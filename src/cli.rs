@@ -2,9 +2,9 @@
 //! the crate. Mirrors the `--scramble` / `--solve corners` / `--memo
 //! trainer` usage sketched out in the README.
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use crate::{cube, memo, trainer};
+use crate::{cube, lettering, memo, trainer};
 
 #[derive(Parser)]
 #[command(name = "3bld-coach", version, about = "A trainer for 3x3 blindfolded solving")]
@@ -25,15 +25,47 @@ enum Command {
     Solve {
         #[arg(value_enum)]
         piece: Piece,
+        #[command(flatten)]
+        buffers: BufferArgs,
     },
     /// Run an interactive memo and execution practice session.
-    Memo,
+    Memo {
+        #[command(flatten)]
+        buffers: BufferArgs,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
 enum Piece {
     Corners,
     Edges,
+}
+
+/// Buffer piece letters, shared by `solve` and `memo`, so solvers aren't
+/// stuck with the UBL corner / UB edge defaults.
+#[derive(Args)]
+struct BufferArgs {
+    /// Corner buffer letter (Speffz 'A'..='X'; default 'A', UBL).
+    #[arg(long, default_value = "A", value_parser = parse_speffz_letter)]
+    corner_buffer: char,
+    /// Edge buffer letter (Speffz 'A'..='X'; default 'A', UB).
+    #[arg(long, default_value = "A", value_parser = parse_speffz_letter)]
+    edge_buffer: char,
+}
+
+impl BufferArgs {
+    fn buffers(&self) -> lettering::Buffers {
+        lettering::Buffers::new(self.corner_buffer, self.edge_buffer)
+            .expect("already validated by parse_speffz_letter")
+    }
+}
+
+/// Parses a single Speffz letter from a CLI argument, case-insensitively.
+fn parse_speffz_letter(s: &str) -> Result<char, String> {
+    match s.to_ascii_uppercase().chars().collect::<Vec<_>>()[..] {
+        [c] if ('A'..='X').contains(&c) => Ok(c),
+        _ => Err(format!("`{s}` is not a Speffz letter ('a'..='x')")),
+    }
 }
 
 pub fn run() {
@@ -43,14 +75,14 @@ pub fn run() {
             let scramble = cube::random_scramble(length);
             println!("{}", cube::to_wca_string(&scramble));
         }
-        Command::Solve { piece } => {
+        Command::Solve { piece, buffers } => {
             let piece = match piece {
                 Piece::Corners => memo::Piece::Corners,
                 Piece::Edges => memo::Piece::Edges,
             };
             let scramble = cube::random_scramble(25);
             let cube = cube::scrambled(&scramble);
-            let steps = memo::cycles(&cube, piece, &Default::default());
+            let steps = memo::cycles(&cube, piece, &buffers.buffers());
 
             println!("Scramble: {}", cube::to_wca_string(&scramble));
             if steps.is_empty() {
@@ -60,6 +92,6 @@ pub fn run() {
                 println!("Memo: {letters}");
             }
         }
-        Command::Memo => trainer::run_session(),
+        Command::Memo { buffers } => trainer::run_session(&buffers.buffers()),
     }
 }

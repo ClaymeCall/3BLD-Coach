@@ -11,7 +11,9 @@ replaced with a `devenv`-managed Rust setup.
 
 - `main.rs` — wires up the module tree and calls `cli::run()`.
 - `cli.rs` — clap-based CLI with three subcommands: `scramble`, `solve
-  <corners|edges>`, `memo`.
+  <corners|edges>`, `memo`. `solve` and `memo` both take `--corner-buffer`
+  and `--edge-buffer` (Speffz letters, default `A`/`A` i.e. UBL/UB) via a
+  shared `BufferArgs`, so solvers aren't stuck with the hardcoded defaults.
 - `cube.rs` — wraps `cubesim::FaceletCube` as `CubeState`; generates random
   WCA-notation scrambles and formats `Move` sequences back to notation.
 - `lettering.rs` — Speffz-style A–X letter scheme and buffer definitions.
@@ -44,6 +46,9 @@ replaced with a `devenv`-managed Rust setup.
 - `cargo run -- memo` runs a full memorize → execute → review session:
   scramble, memo prompts, an execution timer, and a correct/incorrect report
   per piece type.
+- `--corner-buffer`/`--edge-buffer` on `solve` and `memo` let solvers pick
+  their own buffer pieces (any Speffz letter `A`-`X`) instead of the UBL/UB
+  defaults.
 - `cargo run -- --help` shows a working CLI with all three subcommands
   fully wired up.
 
@@ -53,14 +58,11 @@ replaced with a `devenv`-managed Rust setup.
 
 ## Next steps
 
-1. Revisit the buffer defaults (currently hardcoded to UBL corner / UB
-   edge) as configurable CLI options, so solvers can practice with their
-   own buffer pieces instead of the fixed default.
-2. Consider 3-style memo generation once the Old Pochmann/M2 path works
+1. Consider 3-style memo generation once the Old Pochmann/M2 path works
    end to end. This is a separate algorithm (commutator-based 3-cycle
    resolution) with no existing scaffolding, not an extension of
    `memo::cycles`.
-3. Consider chunking `trainer`'s memo letters into groups for display
+2. Consider chunking `trainer`'s memo letters into groups for display
    (e.g. "BRNEQI" as "BR NE QI"), closer to how letter-pair methods are
    practiced in real form. Make the group size a parameter (2 for Old
    Pochmann pairs, 3 for M2 triples) rather than hardcoding pairs.

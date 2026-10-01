@@ -22,6 +22,7 @@ use cubesim::Face;
 
 /// The fixed sticker a solver looks at first for each piece type; cycles are
 /// broken relative to these.
+#[derive(Debug)]
 pub struct Buffers {
     pub corner: char,
     pub edge: char,
@@ -33,6 +34,22 @@ impl Default for Buffers {
         // buffer-based methods (Old Pochmann, M2) that this project targets
         // first.
         Self { corner: 'A', edge: 'A' }
+    }
+}
+
+impl Buffers {
+    /// Builds a custom buffer pair, so solvers aren't stuck with the UBL
+    /// corner / UB edge defaults.
+    ///
+    /// Returns an error naming the offending letter if either isn't a
+    /// Speffz letter (`'A'..='X'`).
+    pub fn new(corner: char, edge: char) -> Result<Self, String> {
+        for (name, letter) in [("corner", corner), ("edge", edge)] {
+            if !('A'..='X').contains(&letter) {
+                return Err(format!("{name} buffer must be a Speffz letter 'A'..='X', got '{letter}'"));
+            }
+        }
+        Ok(Self { corner, edge })
     }
 }
 
@@ -289,6 +306,20 @@ mod tests {
         let mut seen: Vec<char> = groups.into_iter().flatten().collect();
         seen.sort_unstable();
         assert_eq!(seen, ('A'..='X').collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn buffers_new_accepts_any_speffz_letter_pair() {
+        let buffers = Buffers::new('D', 'Q').unwrap();
+        assert_eq!((buffers.corner, buffers.edge), ('D', 'Q'));
+    }
+
+    #[test]
+    fn buffers_new_rejects_a_letter_outside_a_through_x() {
+        let err = Buffers::new('Y', 'A').unwrap_err();
+        assert!(err.contains("corner"), "{err}");
+        let err = Buffers::new('A', '1').unwrap_err();
+        assert!(err.contains("edge"), "{err}");
     }
 
     #[test]
