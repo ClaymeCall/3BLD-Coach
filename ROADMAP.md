@@ -15,38 +15,52 @@ replaced with a `devenv`-managed Rust setup.
 - `cube.rs` — wraps `cubesim::FaceletCube` as `CubeState`; generates random
   WCA-notation scrambles and formats `Move` sequences back to notation.
 - `lettering.rs` — Speffz-style A–X letter scheme and buffer definitions.
-  `speffz_letter` is implemented and unit-tested; not yet wired into
-  `memo.rs`.
+  `speffz_letter` maps a sticker to its letter; `corner_sticker`/
+  `edge_sticker` invert it; `corner_piece`/`edge_piece` group the 3 (or 2)
+  letters that name the same physical piece. The piece-grouping tables were
+  derived empirically against `cubesim`'s facelet layout (see `memo.rs`'s
+  module doc) and cross-checked against the pre-existing UFL/UF unit tests.
 - `memo.rs` — cycle-breaking over corner/edge permutations relative to a
-  buffer. **Stub.**
+  buffer. **Implemented.** `cycles` walks the buffer's permutation cycle via
+  color-set matching (no reliance on `cubesim` internals beyond `state()`),
+  then continues into any further unsolved pieces as additional
+  Old-Pochmann-style "floating" cycles, the way a solver picks up a fresh
+  letter pair once the buffer's own cycle closes.
 - `trainer.rs` — interactive memorize → execute → review practice loop.
-  **Stub.**
+  **Implemented.** `session` (the testable core of `run_session`) prints the
+  scramble, prompts for the corner and edge memo the solver came up with
+  *before* any execution happens, times the gap between two Enter presses as
+  execution time, then reports each piece type as correct or incorrect
+  against `memo::cycles`'s answer.
 
 ### What works
 
 - `cargo run -- scramble --length 20` generates a valid WCA scramble (18
-  basic face turns, no immediate face repeats). This is the only fully
-  implemented feature.
+  basic face turns, no immediate face repeats).
+- `cargo run -- solve corners` / `solve edges` scrambles a cube and prints
+  the Old-Pochmann-style letter memo for that piece type (or "Already
+  solved." if the buffer's piece and everything else already happens to be
+  correct).
+- `cargo run -- memo` runs a full memorize → execute → review session:
+  scramble, memo prompts, an execution timer, and a correct/incorrect report
+  per piece type.
 - `cargo run -- --help` shows a working CLI with all three subcommands
-  wired up (though two of them panic with `todo!()` when invoked).
+  fully wired up.
 
 ### What's missing
 
-- `solve corners` / `solve edges` — not implemented; blocked on `memo.rs`.
-- `memo.rs` — cycle-breaking logic; the key missing piece, now that
-  `lettering.rs` is implemented.
-- `memo` subcommand / `trainer.rs` — the interactive practice session;
-  blocked on both of the above.
+- Nothing blocking; see "Next steps" for what's left.
 
 ## Next steps
 
-1. Implement `memo::cycles`, walking the corner/edge permutation cycles from
-   a buffer piece to produce the letter-pair memo sequence a solver would
-   learn (Old Pochmann / M2 style to start).
-2. Wire `cli::run`'s `solve` branch to print that memo sequence instead of
-   calling `todo!()`.
-3. Implement `trainer::run_session`: scramble, prompt for memorized letters,
-   time execution, and report results.
-4. Longer-term, revisit the buffer/lettering defaults (currently hardcoded
-   to UBL corner / UB edge) as configurable CLI options, and consider
-   3-style memo generation once the Old Pochmann/M2 path works end to end.
+1. Revisit the buffer defaults (currently hardcoded to UBL corner / UB
+   edge) as configurable CLI options, so solvers can practice with their
+   own buffer pieces instead of the fixed default.
+2. Consider 3-style memo generation once the Old Pochmann/M2 path works
+   end to end. This is a separate algorithm (commutator-based 3-cycle
+   resolution) with no existing scaffolding, not an extension of
+   `memo::cycles`.
+3. Consider chunking `trainer`'s memo letters into groups for display
+   (e.g. "BRNEQI" as "BR NE QI"), closer to how letter-pair methods are
+   practiced in real form. Make the group size a parameter (2 for Old
+   Pochmann pairs, 3 for M2 triples) rather than hardcoding pairs.

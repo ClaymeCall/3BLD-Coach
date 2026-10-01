@@ -48,8 +48,17 @@ pub fn run() {
                 Piece::Corners => memo::Piece::Corners,
                 Piece::Edges => memo::Piece::Edges,
             };
-            let cube = cube::scrambled(&cube::random_scramble(25));
-            memo::cycles(&cube, piece, &Default::default());
+            let scramble = cube::random_scramble(25);
+            let cube = cube::scrambled(&scramble);
+            let steps = memo::cycles(&cube, piece, &Default::default());
+
+            println!("Scramble: {}", cube::to_wca_string(&scramble));
+            if steps.is_empty() {
+                println!("Already solved.");
+            } else {
+                let letters: String = steps.iter().map(|s| s.letter).collect();
+                println!("Memo: {letters}");
+            }
         }
         Command::Memo => trainer::run_session(),
     }
