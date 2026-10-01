@@ -32,6 +32,10 @@ enum Command {
     Memo {
         #[command(flatten)]
         buffers: BufferArgs,
+        /// Letters per group when displaying memo results (2 for Old
+        /// Pochmann pairs, 3 for M2 triples).
+        #[arg(long, default_value_t = 2)]
+        group_size: usize,
     },
 }
 
@@ -92,6 +96,6 @@ pub fn run() {
                 println!("Memo: {letters}");
             }
         }
-        Command::Memo { buffers } => trainer::run_session(&buffers.buffers()),
+        Command::Memo { buffers, group_size } => trainer::run_session(&buffers.buffers(), group_size),
     }
 }

@@ -33,7 +33,11 @@ replaced with a `devenv`-managed Rust setup.
   scramble, prompts for the corner and edge memo the solver came up with
   *before* any execution happens, times the gap between two Enter presses as
   execution time, then reports each piece type as correct or incorrect
-  against `memo::cycles`'s answer.
+  against `memo::cycles`'s answer. The report displays the expected memo
+  chunked into `group_size`-letter groups (`chunk_letters`, e.g. "BR NE
+  QI" for `group_size` 2), matching how letter-pair/triple methods are
+  practiced; correctness checking always compares the raw, unchunked
+  letters.
 
 ### What works
 
@@ -45,7 +49,8 @@ replaced with a `devenv`-managed Rust setup.
   correct).
 - `cargo run -- memo` runs a full memorize → execute → review session:
   scramble, memo prompts, an execution timer, and a correct/incorrect report
-  per piece type.
+  per piece type, with the expected memo displayed in `--group-size`-letter
+  groups (default 2).
 - `--corner-buffer`/`--edge-buffer` on `solve` and `memo` let solvers pick
   their own buffer pieces (any Speffz letter `A`-`X`) instead of the UBL/UB
   defaults.
@@ -62,7 +67,3 @@ replaced with a `devenv`-managed Rust setup.
    end to end. This is a separate algorithm (commutator-based 3-cycle
    resolution) with no existing scaffolding, not an extension of
    `memo::cycles`.
-2. Consider chunking `trainer`'s memo letters into groups for display
-   (e.g. "BRNEQI" as "BR NE QI"), closer to how letter-pair methods are
-   practiced in real form. Make the group size a parameter (2 for Old
-   Pochmann pairs, 3 for M2 triples) rather than hardcoding pairs.

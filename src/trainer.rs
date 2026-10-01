@@ -17,19 +17,37 @@ use crate::memo::{self, CycleStep, Piece};
 
 /// Runs one interactive memo + execution practice session against
 /// stdin/stdout.
-pub fn run_session(buffers: &Buffers) {
+///
+/// `group_size` controls how the memo letters are displayed back to the
+/// solver (2 for Old Pochmann pairs, 3 for M2 triples, ...); it has no
+/// effect on correctness checking, which always compares the raw letters.
+pub fn run_session(buffers: &Buffers, group_size: usize) {
     let scramble = cube::random_scramble(25);
     let cube = cube::scrambled(&scramble);
     let stdin = io::stdin();
     let stdout = io::stdout();
 
-    session(&cube, &cube::to_wca_string(&scramble), buffers, stdin.lock(), stdout.lock());
+    session(
+        &cube,
+        &cube::to_wca_string(&scramble),
+        buffers,
+        group_size,
+        stdin.lock(),
+        stdout.lock(),
+    );
 }
 
 /// The testable core of [`run_session`]: takes the scramble already applied
 /// (so tests can set up specific cube states) and generic input/output, so
 /// it never has to touch real stdin/stdout.
-fn session(cube: &CubeState, scramble: &str, buffers: &Buffers, mut input: impl BufRead, mut output: impl Write) {
+fn session(
+    cube: &CubeState,
+    scramble: &str,
+    buffers: &Buffers,
+    group_size: usize,
+    mut input: impl BufRead,
+    mut output: impl Write,
+) {
     let corner_memo = letters_of(&memo::cycles(cube, Piece::Corners, buffers));
     let edge_memo = letters_of(&memo::cycles(cube, Piece::Edges, buffers));
 
@@ -45,7 +63,8 @@ fn session(cube: &CubeState, scramble: &str, buffers: &Buffers, mut input: impl 
     wait_for_enter(&mut input);
     let elapsed = start.elapsed();
 
-    writeln!(output, "{}", report(&corner_memo, &corner_answer, &edge_memo, &edge_answer, elapsed)).unwrap();
+    let report = report(&corner_memo, &corner_answer, &edge_memo, &edge_answer, elapsed, group_size);
+    writeln!(output, "{report}").unwrap();
 }
 
 /// The letters of a memo sequence, in order, as a single string (e.g. the
@@ -72,23 +91,50 @@ fn read_line(input: &mut impl BufRead) -> String {
 
 /// Builds the end-of-session report: execution time plus a correct/
 /// incorrect line for each piece type.
-fn report(corner_memo: &str, corner_answer: &str, edge_memo: &str, edge_answer: &str, elapsed: Duration) -> String {
+fn report(
+    corner_memo: &str,
+    corner_answer: &str,
+    edge_memo: &str,
+    edge_answer: &str,
+    elapsed: Duration,
+    group_size: usize,
+) -> String {
     [
         format!("Execution time: {:.2}s", elapsed.as_secs_f64()),
-        piece_report("Corners", corner_memo, corner_answer),
-        piece_report("Edges", edge_memo, edge_answer),
+        piece_report("Corners", corner_memo, corner_answer, group_size),
+        piece_report("Edges", edge_memo, edge_answer, group_size),
     ]
     .join("\n")
 }
 
-fn piece_report(name: &str, expected: &str, given: &str) -> String {
-    let display = |memo: &str| if memo.is_empty() { "already solved".to_string() } else { memo.to_string() };
+fn piece_report(name: &str, expected: &str, given: &str, group_size: usize) -> String {
+    let display = |memo: &str| {
+        if memo.is_empty() {
+            "already solved".to_string()
+        } else {
+            chunk_letters(memo, group_size)
+        }
+    };
 
     if given == expected {
         format!("{name}: correct ({})", display(expected))
     } else {
         format!("{name}: incorrect -- you wrote \"{given}\", correct memo was \"{}\"", display(expected))
     }
+}
+
+/// Splits `letters` into space-separated groups of `group_size` (e.g.
+/// `chunk_letters("BRNEQI", 2)` is `"BR NE QI"`), the way letter-pair (Old
+/// Pochmann) or letter-triple (M2) methods display a memo for recall. A
+/// `group_size` of 0 is treated as 1, and a final short group is kept as-is
+/// rather than dropped.
+fn chunk_letters(letters: &str, group_size: usize) -> String {
+    let chars: Vec<char> = letters.chars().collect();
+    chars
+        .chunks(group_size.max(1))
+        .map(|group| group.iter().collect::<String>())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[cfg(test)]
@@ -100,13 +146,13 @@ mod tests {
     /// Runs `session` with scripted stdin lines and returns everything it
     /// printed, for assertions against the transcript.
     fn run(cube: &CubeState, input_lines: &[&str]) -> String {
-        run_with(cube, &Buffers::default(), input_lines)
+        run_with(cube, &Buffers::default(), 2, input_lines)
     }
 
-    fn run_with(cube: &CubeState, buffers: &Buffers, input_lines: &[&str]) -> String {
+    fn run_with(cube: &CubeState, buffers: &Buffers, group_size: usize, input_lines: &[&str]) -> String {
         let input = Cursor::new(input_lines.join("\n").into_bytes());
         let mut output = Vec::new();
-        session(cube, "R U F", buffers, input, &mut output);
+        session(cube, "R U F", buffers, group_size, input, &mut output);
         String::from_utf8(output).unwrap()
     }
 
@@ -179,7 +225,30 @@ mod tests {
         let cube = FaceletCube::from(state);
 
         let buffers = Buffers::new('E', 'A').unwrap();
-        let transcript = run_with(&cube, &buffers, &["RA", "", "", ""]);
+        let transcript = run_with(&cube, &buffers, 2, &["RA", "", "", ""]);
         assert!(transcript.contains("Corners: correct (RA)"), "{transcript}");
+    }
+
+    #[test]
+    fn chunk_letters_groups_by_size_keeping_a_short_final_group() {
+        assert_eq!(chunk_letters("BRNEQI", 2), "BR NE QI");
+        assert_eq!(chunk_letters("BRNEQI", 3), "BRN EQI");
+        assert_eq!(chunk_letters("BRNEQ", 2), "BR NE Q");
+        assert_eq!(chunk_letters("", 2), "");
+        assert_eq!(chunk_letters("BR", 0), "B R");
+    }
+
+    #[test]
+    fn report_displays_the_expected_memo_grouped_by_group_size() {
+        // Same buffer-corner twist as elsewhere: expects "ER". Grouped by 1
+        // that's displayed as "E R".
+        let mut state = cubesim::solved_state(3);
+        state[sticker_index(3, Face::U, 1) as usize] = Face::L;
+        state[sticker_index(3, Face::L, 1) as usize] = Face::B;
+        state[sticker_index(3, Face::B, 3) as usize] = Face::U;
+        let cube = FaceletCube::from(state);
+
+        let transcript = run_with(&cube, &Buffers::default(), 1, &["ER", "", "", ""]);
+        assert!(transcript.contains("Corners: correct (E R)"), "{transcript}");
     }
 }
