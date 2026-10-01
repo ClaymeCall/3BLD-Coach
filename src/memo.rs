@@ -1,31 +1,13 @@
 //! Cycle-breaking: given a scrambled cube and a buffer piece, work out the
 //! sequence of pieces visited -- and therefore the letter pairs to
 //! memorize -- to solve that piece type with a buffer-based method (Old
-//! Pochmann, M2, 3-style, ...).
-//!
-//! The core move is [`next_letter`]: given a sticker letter `t`, read the
-//! colors currently sitting on `t`'s physical piece, find the (unique)
-//! other physical piece on the cube with that same set of colors, and
-//! return the letter of *that* piece's sticker whose home color matches the
-//! color actually sitting at `t`. Starting from the buffer and repeatedly
-//! applying this traces exactly the letter sequence a blindfolded solver
-//! would memorize: each step names where the piece currently occupying the
-//! previous letter's spot actually belongs.
-
-use std::collections::HashSet;
-
-use cubesim::{sticker_index, Cube, Face};
+//! Pochmann, M2). See `cycle` for the shared permutation-walking primitives
+//! this and `threestyle` are both built on.
 
 use crate::cube::CubeState;
-use crate::lettering::{self, Buffers};
-
-/// Piece type being solved, which determines which stickers matter and how
-/// cycles are broken.
-#[derive(Clone, Copy)]
-pub enum Piece {
-    Corners,
-    Edges,
-}
+use crate::cycle;
+pub use crate::cycle::Piece;
+use crate::lettering::Buffers;
 
 /// One step of a memo sequence: the buffer swaps with the piece at this
 /// sticker next.
@@ -43,94 +25,22 @@ pub struct CycleStep {
 /// fresh (not through the buffer) the way a solver picks up a "floating"
 /// letter pair after closing out the buffer's cycle.
 pub fn cycles(cube: &CubeState, piece: Piece, buffers: &Buffers) -> Vec<CycleStep> {
-    let state = cube.state();
-    let slots = distinct_pieces(piece);
-
-    let slot_index = |letter: char| -> usize {
-        slots
-            .iter()
-            .position(|group| group.contains(&letter))
-            .expect("every 'A'..='X' letter belongs to exactly one piece")
-    };
-
-    let color_at = |letter: char| -> Face {
-        let (face, idx) = sticker(piece, letter);
-        state[sticker_index(3, face, idx) as usize]
-    };
-
-    let home_face = |letter: char| -> Face { sticker(piece, letter).0 };
-
-    let next_letter = |t: char| -> char {
-        let slot = &slots[slot_index(t)];
-        let colors: HashSet<Face> = slot.iter().map(|&l| color_at(l)).collect();
-        let target = slots
-            .iter()
-            .find(|group| group.iter().map(|&l| home_face(l)).collect::<HashSet<_>>() == colors)
-            .expect("a piece's current colors always match some physical piece on a valid cube");
-        let c = color_at(t);
-        *target
-            .iter()
-            .find(|&&l| home_face(l) == c)
-            .expect("a piece's colors always match one of its own stickers")
-    };
-
     let buffer_letter = match piece {
         Piece::Corners => buffers.corner,
         Piece::Edges => buffers.edge,
     };
 
-    let mut visited = vec![false; slots.len()];
     let mut result = Vec::new();
-    let mut entry = Some(buffer_letter);
-
-    while let Some(start) = entry {
-        visited[slot_index(start)] = true;
-        let mut t = start;
-        loop {
-            let next = next_letter(t);
-            if next == start {
-                break;
-            }
-            result.push(CycleStep { letter: next });
-            visited[slot_index(next)] = true;
-            t = next;
-        }
-
-        entry = ('A'..='X')
-            .filter(|&l| !visited[slot_index(l)])
-            .find(|&l| next_letter(l) != l);
-    }
-
+    cycle::walk_cycles(cube, piece, buffer_letter, |_start, raw| {
+        result.extend(raw.iter().map(|&letter| CycleStep { letter }));
+    });
     result
-}
-
-fn sticker(piece: Piece, letter: char) -> (Face, i32) {
-    match piece {
-        Piece::Corners => lettering::corner_sticker(letter),
-        Piece::Edges => lettering::edge_sticker(letter),
-    }
-}
-
-/// The distinct physical pieces of `piece`'s type, as groups of their
-/// letters.
-fn distinct_pieces(piece: Piece) -> Vec<Vec<char>> {
-    let mut slots: Vec<Vec<char>> = Vec::new();
-    for letter in 'A'..='X' {
-        let group: Vec<char> = match piece {
-            Piece::Corners => lettering::corner_piece(letter).to_vec(),
-            Piece::Edges => lettering::edge_piece(letter).to_vec(),
-        };
-        if !slots.contains(&group) {
-            slots.push(group);
-        }
-    }
-    slots
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cubesim::FaceletCube;
+    use cubesim::{sticker_index, Face, FaceletCube};
 
     fn letters(steps: &[CycleStep]) -> Vec<char> {
         steps.iter().map(|s| s.letter).collect()

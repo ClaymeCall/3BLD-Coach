@@ -14,33 +14,42 @@ use std::time::{Duration, Instant};
 use crate::cube::{self, CubeState};
 use crate::lettering::Buffers;
 use crate::memo::{self, CycleStep, Piece};
+use crate::threestyle::{self, Target};
+
+/// Which memo method an interactive session practices.
+#[derive(Clone, Copy)]
+pub enum Method {
+    OldPochmann,
+    ThreeStyle,
+}
 
 /// Runs one interactive memo + execution practice session against
 /// stdin/stdout.
 ///
-/// `group_size` controls how the memo letters are displayed back to the
-/// solver (2 for Old Pochmann pairs, 3 for M2 triples, ...); it has no
-/// effect on correctness checking, which always compares the raw letters.
-pub fn run_session(buffers: &Buffers, group_size: usize) {
+/// `group_size` controls how an Old Pochmann memo's letters are displayed
+/// back to the solver (2 for letter pairs, 3 for M2 triples, ...); it has
+/// no effect on correctness checking, which always compares the raw
+/// letters, and it's unused for [`Method::ThreeStyle`] (whose targets each
+/// display as their own token regardless of size).
+pub fn run_session(buffers: &Buffers, method: Method, group_size: usize) {
     let scramble = cube::random_scramble(25);
     let cube = cube::scrambled(&scramble);
+    let scramble_str = cube::to_wca_string(&scramble);
     let stdin = io::stdin();
     let stdout = io::stdout();
 
-    session(
-        &cube,
-        &cube::to_wca_string(&scramble),
-        buffers,
-        group_size,
-        stdin.lock(),
-        stdout.lock(),
-    );
+    match method {
+        Method::OldPochmann => {
+            session_old_pochmann(&cube, &scramble_str, buffers, group_size, stdin.lock(), stdout.lock())
+        }
+        Method::ThreeStyle => session_three_style(&cube, &scramble_str, buffers, stdin.lock(), stdout.lock()),
+    }
 }
 
-/// The testable core of [`run_session`]: takes the scramble already applied
-/// (so tests can set up specific cube states) and generic input/output, so
-/// it never has to touch real stdin/stdout.
-fn session(
+/// The testable core of [`run_session`] for [`Method::OldPochmann`]: takes
+/// the scramble already applied (so tests can set up specific cube states)
+/// and generic input/output, so it never has to touch real stdin/stdout.
+fn session_old_pochmann(
     cube: &CubeState,
     scramble: &str,
     buffers: &Buffers,
@@ -66,6 +75,61 @@ fn session(
     let report = report(&corner_memo, &corner_answer, &edge_memo, &edge_answer, elapsed, group_size);
     writeln!(output, "{report}").unwrap();
 }
+
+/// The testable core of [`run_session`] for [`Method::ThreeStyle`].
+///
+/// Unlike Old Pochmann's single "the raw letters must match exactly" check,
+/// an answer is accepted whenever [`threestyle::validate_piece`] confirms it
+/// actually resolves the scramble -- freestyle 3-style allows more than one
+/// correct decomposition for the same scramble, so correctness here is
+/// checked semantically rather than by string comparison.
+fn session_three_style(
+    cube: &CubeState,
+    scramble: &str,
+    buffers: &Buffers,
+    mut input: impl BufRead,
+    mut output: impl Write,
+) {
+    let memo = threestyle::generate(cube, buffers);
+
+    writeln!(output, "Scramble: {scramble}").unwrap();
+
+    let corner_answer = prompt(&mut input, &mut output, "Corner memo (blank if already solved): ");
+    let edge_answer = prompt(&mut input, &mut output, "Edge memo (blank if already solved): ");
+
+    writeln!(output, "Press Enter to start executing your solve...").unwrap();
+    wait_for_enter(&mut input);
+    let start = Instant::now();
+    writeln!(output, "Press Enter once you've finished executing.").unwrap();
+    wait_for_enter(&mut input);
+    let elapsed = start.elapsed();
+
+    let report = [
+        format!("Execution time: {:.2}s", elapsed.as_secs_f64()),
+        three_style_piece_report(cube, "Corners", Piece::Corners, &memo.corners, &corner_answer),
+        three_style_piece_report(cube, "Edges", Piece::Edges, &memo.edges, &edge_answer),
+    ]
+    .join("\n");
+    writeln!(output, "{report}").unwrap();
+}
+
+fn three_style_piece_report(cube: &CubeState, name: &str, piece: Piece, expected: &[Target], given: &str) -> String {
+    let expected_display =
+        if expected.is_empty() { "already solved".to_string() } else { threestyle::display(expected) };
+
+    match threestyle::parse_tokens(given, piece) {
+        Err(parse_err) => {
+            format!("{name}: incorrect -- you wrote \"{given}\" ({parse_err}), correct memo was \"{expected_display}\"")
+        }
+        Ok(answer) => match threestyle::validate_piece(cube, piece, &answer) {
+            Ok(()) => format!("{name}: correct ({expected_display})"),
+            Err(_) => format!(
+                "{name}: incorrect -- you wrote \"{given}\", correct memo was \"{expected_display}\""
+            ),
+        },
+    }
+}
+
 
 /// The letters of a memo sequence, in order, as a single string (e.g. the
 /// pair `"ER"`), the way a solver would write it down.
@@ -143,8 +207,8 @@ mod tests {
     use cubesim::{sticker_index, Face, FaceletCube};
     use std::io::Cursor;
 
-    /// Runs `session` with scripted stdin lines and returns everything it
-    /// printed, for assertions against the transcript.
+    /// Runs `session_old_pochmann` with scripted stdin lines and returns
+    /// everything it printed, for assertions against the transcript.
     fn run(cube: &CubeState, input_lines: &[&str]) -> String {
         run_with(cube, &Buffers::default(), 2, input_lines)
     }
@@ -152,7 +216,16 @@ mod tests {
     fn run_with(cube: &CubeState, buffers: &Buffers, group_size: usize, input_lines: &[&str]) -> String {
         let input = Cursor::new(input_lines.join("\n").into_bytes());
         let mut output = Vec::new();
-        session(cube, "R U F", buffers, group_size, input, &mut output);
+        session_old_pochmann(cube, "R U F", buffers, group_size, input, &mut output);
+        String::from_utf8(output).unwrap()
+    }
+
+    /// Runs `session_three_style` with scripted stdin lines and returns
+    /// everything it printed.
+    fn run_three_style(cube: &CubeState, buffers: &Buffers, input_lines: &[&str]) -> String {
+        let input = Cursor::new(input_lines.join("\n").into_bytes());
+        let mut output = Vec::new();
+        session_three_style(cube, "R U F", buffers, input, &mut output);
         String::from_utf8(output).unwrap()
     }
 
@@ -250,5 +323,93 @@ mod tests {
 
         let transcript = run_with(&cube, &Buffers::default(), 1, &["ER", "", "", ""]);
         assert!(transcript.contains("Corners: correct (E R)"), "{transcript}");
+    }
+
+    /// Renders targets as bare, unannotated tokens -- the way a solver
+    /// would type them back, not the way `display_target` shows them.
+    fn to_answer_text(targets: &[Target]) -> String {
+        targets
+            .iter()
+            .map(|t| match *t {
+                Target::CornerSwap { from, to } | Target::EdgeSwap { from, to } => format!("{from}{to}"),
+                Target::CornerTwist { letters: [a, b] } => format!("{a}{b}"),
+                Target::EdgeFlip { letter } | Target::CornerParity { letter } | Target::EdgeParity { letter } => {
+                    letter.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    #[test]
+    fn three_style_solved_cube_expects_blank_everywhere() {
+        let transcript = run_three_style(&cube::solved(), &Buffers::default(), &["", "", "", ""]);
+        assert!(transcript.contains("Corners: correct (already solved)"), "{transcript}");
+        assert!(transcript.contains("Edges: correct (already solved)"), "{transcript}");
+    }
+
+    #[test]
+    fn three_style_accepts_the_canonical_generated_answer() {
+        use cubesim::{Cube, Move, MoveVariant};
+        let cube = crate::cube::solved().apply_moves(&[Move::R(MoveVariant::Standard)]);
+        let memo = threestyle::generate(&cube, &Buffers::default());
+
+        let transcript = run_three_style(
+            &cube,
+            &Buffers::default(),
+            &[&to_answer_text(&memo.corners), &to_answer_text(&memo.edges), "", ""],
+        );
+        assert!(transcript.contains("Corners: correct"), "{transcript}");
+        assert!(transcript.contains("Edges: correct"), "{transcript}");
+    }
+
+    /// Feeds a *different* valid decomposition of the same scramble than
+    /// the one `generate` itself produces (same construction as
+    /// `threestyle::tests::an_alternative_valid_decomposition_is_also_accepted`)
+    /// through the full session transcript, proving the trainer -- not just
+    /// the unit-level validator -- honors freestyle flexibility.
+    #[test]
+    fn three_style_accepts_a_different_but_valid_answer() {
+        use cubesim::{Cube, Move, MoveVariant};
+        let cube = crate::cube::solved().apply_moves(&[Move::R(MoveVariant::Standard)]);
+        let memo = threestyle::generate(&cube, &Buffers::default());
+
+        let track_one = [Target::CornerSwap { from: 'J', to: 'V' }, Target::CornerParity { letter: 'T' }];
+        let mut alternative_corners: Vec<Target> =
+            memo.corners.iter().copied().filter(|t| !track_one.contains(t)).collect();
+        alternative_corners.push(Target::CornerSwap { from: 'V', to: 'T' });
+        alternative_corners.push(Target::CornerParity { letter: 'J' });
+        assert_ne!(alternative_corners, memo.corners);
+
+        let transcript = run_three_style(
+            &cube,
+            &Buffers::default(),
+            &[&to_answer_text(&alternative_corners), &to_answer_text(&memo.edges), "", ""],
+        );
+        assert!(transcript.contains("Corners: correct"), "{transcript}");
+    }
+
+    #[test]
+    fn three_style_reports_a_twist_target_distinctly_in_the_display() {
+        // Same buffer-corner twist as elsewhere: expects CornerTwist{['E','R']}.
+        let mut state = cubesim::solved_state(3);
+        state[sticker_index(3, Face::U, 1) as usize] = Face::L;
+        state[sticker_index(3, Face::L, 1) as usize] = Face::B;
+        state[sticker_index(3, Face::B, 3) as usize] = Face::U;
+        let cube = FaceletCube::from(state);
+
+        let transcript = run_three_style(&cube, &Buffers::default(), &["ER", "", "", ""]);
+        assert!(transcript.contains("Corners: correct (ER (twist))"), "{transcript}");
+    }
+
+    #[test]
+    fn three_style_reports_a_parity_target_distinctly_in_the_display() {
+        let mut state = cubesim::solved_state(3);
+        state[sticker_index(3, Face::B, 1) as usize] = Face::F; // UBR's B-sticker (letter Q)
+        state[sticker_index(3, Face::F, 3) as usize] = Face::B; // UFR's F-sticker (letter J)
+        let cube = FaceletCube::from(state);
+
+        let transcript = run_three_style(&cube, &Buffers::default(), &["", "", "", ""]);
+        assert!(transcript.contains("(parity)"), "{transcript}");
     }
 }

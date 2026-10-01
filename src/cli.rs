@@ -4,7 +4,8 @@
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use crate::{cube, lettering, memo, trainer};
+use crate::threestyle::Target;
+use crate::{cube, lettering, memo, threestyle, trainer};
 
 #[derive(Parser)]
 #[command(name = "3bld-coach", version, about = "A trainer for 3x3 blindfolded solving")]
@@ -27,15 +28,24 @@ enum Command {
         piece: Piece,
         #[command(flatten)]
         buffers: BufferArgs,
+        /// Memo method: Old Pochmann/M2's buffer-routed cycles, or
+        /// freestyle 3-style.
+        #[arg(long, value_enum, default_value_t = Method::OldPochmann)]
+        method: Method,
     },
     /// Run an interactive memo and execution practice session.
     Memo {
         #[command(flatten)]
         buffers: BufferArgs,
-        /// Letters per group when displaying memo results (2 for Old
-        /// Pochmann pairs, 3 for M2 triples).
+        /// Letters per group when displaying an Old Pochmann memo (2 for
+        /// letter pairs, 3 for M2 triples); unused for `--method
+        /// three-style`, whose targets each display as their own token.
         #[arg(long, default_value_t = 2)]
         group_size: usize,
+        /// Memo method: Old Pochmann/M2's buffer-routed cycles, or
+        /// freestyle 3-style.
+        #[arg(long, value_enum, default_value_t = Method::OldPochmann)]
+        method: Method,
     },
 }
 
@@ -43,6 +53,13 @@ enum Command {
 enum Piece {
     Corners,
     Edges,
+}
+
+#[derive(Clone, Copy, Default, ValueEnum)]
+enum Method {
+    #[default]
+    OldPochmann,
+    ThreeStyle,
 }
 
 /// Buffer piece letters, shared by `solve` and `memo`, so solvers aren't
@@ -79,23 +96,58 @@ pub fn run() {
             let scramble = cube::random_scramble(length);
             println!("{}", cube::to_wca_string(&scramble));
         }
-        Command::Solve { piece, buffers } => {
+        Command::Solve { piece, buffers, method } => {
             let piece = match piece {
                 Piece::Corners => memo::Piece::Corners,
                 Piece::Edges => memo::Piece::Edges,
             };
             let scramble = cube::random_scramble(25);
             let cube = cube::scrambled(&scramble);
-            let steps = memo::cycles(&cube, piece, &buffers.buffers());
-
             println!("Scramble: {}", cube::to_wca_string(&scramble));
-            if steps.is_empty() {
-                println!("Already solved.");
-            } else {
-                let letters: String = steps.iter().map(|s| s.letter).collect();
-                println!("Memo: {letters}");
+
+            match method {
+                Method::OldPochmann => {
+                    let steps = memo::cycles(&cube, piece, &buffers.buffers());
+                    if steps.is_empty() {
+                        println!("Already solved.");
+                    } else {
+                        let letters: String = steps.iter().map(|s| s.letter).collect();
+                        println!("Memo: {letters}");
+                    }
+                }
+                Method::ThreeStyle => {
+                    let memo = threestyle::generate(&cube, &buffers.buffers());
+                    let (targets, other_name, other_has_parity) = match piece {
+                        memo::Piece::Corners => {
+                            (&memo.corners, "edge", memo.edges.iter().any(|t| matches!(t, Target::EdgeParity { .. })))
+                        }
+                        memo::Piece::Edges => (
+                            &memo.edges,
+                            "corner",
+                            memo.corners.iter().any(|t| matches!(t, Target::CornerParity { .. })),
+                        ),
+                    };
+
+                    if targets.is_empty() {
+                        println!("Already solved.");
+                    } else {
+                        println!("Memo: {}", threestyle::display(targets));
+                    }
+                    if other_has_parity {
+                        let article = if other_name == "edge" { "an" } else { "a" };
+                        println!(
+                            "Parity required: pair this with {article} {other_name} parity target (see the other piece type)."
+                        );
+                    }
+                }
             }
         }
-        Command::Memo { buffers, group_size } => trainer::run_session(&buffers.buffers(), group_size),
+        Command::Memo { buffers, group_size, method } => {
+            let method = match method {
+                Method::OldPochmann => trainer::Method::OldPochmann,
+                Method::ThreeStyle => trainer::Method::ThreeStyle,
+            };
+            trainer::run_session(&buffers.buffers(), method, group_size)
+        }
     }
 }
