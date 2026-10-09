@@ -7,7 +7,8 @@
 //! (as viewed with that face pointing at you) starting from the sticker
 //! nearest the "upper-left" of the standard net layout. That makes UBL's
 //! U-facing sticker corner letter A, and UB's U-facing sticker edge letter
-//! A -- the conventional Old Pochmann / M2 buffer defaults below.
+//! A -- the conventional Old Pochmann / M2 corner buffer default below (the
+//! edge default instead uses UR, letter B).
 //!
 //! `cubesim`'s facelet layout was confirmed empirically (not just from
 //! docs): applying each single face turn to a solved cube and observing
@@ -30,16 +31,14 @@ pub struct Buffers {
 
 impl Default for Buffers {
     fn default() -> Self {
-        // UBL corner, UB edge: the defaults assumed by most beginner
-        // buffer-based methods (Old Pochmann, M2) that this project targets
-        // first.
-        Self { corner: 'A', edge: 'A' }
+        // UBL corner (the beginner-method convention), UR edge.
+        Self { corner: 'A', edge: 'B' }
     }
 }
 
 impl Buffers {
     /// Builds a custom buffer pair, so solvers aren't stuck with the UBL
-    /// corner / UB edge defaults.
+    /// corner / UR edge defaults.
     ///
     /// Returns an error naming the offending letter if either isn't a
     /// Speffz letter (`'A'..='X'`).

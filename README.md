@@ -53,7 +53,7 @@ cargo run -- solve all
 cargo run -- solve corners --method three-style
 cargo run -- solve all --method three-style
 
-# Pick custom buffer pieces (default is UBL corner / UB edge, i.e. 'A'/'A')
+# Pick custom buffer pieces (default is UBL corner / UR edge, i.e. 'A'/'B')
 cargo run -- solve corners --corner-buffer E
 
 # Run an interactive memorize -> execute -> review session

@@ -65,14 +65,14 @@ enum Method {
 }
 
 /// Buffer piece letters, shared by `solve` and `memo`, so solvers aren't
-/// stuck with the UBL corner / UB edge defaults.
+/// stuck with the UBL corner / UR edge defaults.
 #[derive(Args)]
 struct BufferArgs {
     /// Corner buffer letter (Speffz 'A'..='X'; default 'A', UBL).
     #[arg(long, default_value = "A", value_parser = parse_speffz_letter)]
     corner_buffer: char,
-    /// Edge buffer letter (Speffz 'A'..='X'; default 'A', UB).
-    #[arg(long, default_value = "A", value_parser = parse_speffz_letter)]
+    /// Edge buffer letter (Speffz 'A'..='X'; default 'B', UR).
+    #[arg(long, default_value = "B", value_parser = parse_speffz_letter)]
     edge_buffer: char,
 }
 
@@ -115,7 +115,7 @@ pub fn run() {
             let pieces: &[memo::Piece] = match piece {
                 Piece::Corners => &[memo::Piece::Corners],
                 Piece::Edges => &[memo::Piece::Edges],
-                Piece::All => &[memo::Piece::Corners, memo::Piece::Edges],
+                Piece::All => &[memo::Piece::Edges, memo::Piece::Corners],
             };
             let scramble = cube::random_scramble(25);
             let cube = cube::scrambled(&scramble);
