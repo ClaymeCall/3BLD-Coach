@@ -1,23 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>3BLD Coach Web UI</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <title>3BLD Coach – Lit UI</title>
+  <script type="module" src="components.js"></script>
+  <style>
+    body {font-family:Arial,sans-serif;margin:2rem;background:#f9f9f9;}
+    .card {background:#fff;padding:1rem;margin-bottom:2rem;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);}
+    .error {color:#c00;}
+    .spinner {border:4px solid #f3f3f3;border-top:4px solid #3498db;border-radius:50%;width:20px;height:20px;animation:spin 1s linear infinite;display:inline-block;vertical-align:middle;}
+    @keyframes spin {to{transform:rotate(360deg);}}
+  </style>
 </head>
 <body>
-    <h1>3BLD Coach</h1>
-    <section id="scramble-section">
-        <h2>Generate Scramble</h2>
-        <label>Length: <input type="number" id="scramble-length" value="25" min="1" max="100"></label>
-        <button id="scramble-btn">Generate</button>
-        <pre id="scramble-output"></pre>
-    </section>
-    <section id="memo-section">
-        <h2>Memo (placeholder)</h2>
-        <button id="memo-btn">Start Session</button>
-        <pre id="memo-output"></pre>
-    </section>
-    <script src="app.js"></script>
+  <h1>3BLD Coach</h1>
+  <div class="card"><scramble-app></scramble-app></div>
+  <div class="card"><memo-app></memo-app></div>
 </body>
 </html>
