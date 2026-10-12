@@ -1,0 +1,37 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    working_dir: /app/backend
+    environment:
+      CARGO_TARGET_DIR: /target
+      COACH_BIN: /target/release/3bld-coach
+    # On any change to the CLI (/app/src) or backend: rebuild the CLI, then restart the API
+    command: >
+      cargo watch --poll
+      -w /app/src -w /app/Cargo.toml -w /app/backend/src -w /app/backend/Cargo.toml
+      -s "cargo build --release --manifest-path /app/Cargo.toml && cargo run --manifest-path /app/backend/Cargo.toml"
+    volumes:
+      - ./Cargo.toml:/app/Cargo.toml
+      - ./Cargo.lock:/app/Cargo.lock
+      - ./src:/app/src
+      - ./backend:/app/backend
+      - cargo-target:/target
+      - cargo-registry:/usr/local/cargo/registry
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+  frontend:
+    build: ./frontend
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+volumes:
+  cargo-target:
+  cargo-registry:
